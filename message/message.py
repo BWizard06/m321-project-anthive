@@ -121,11 +121,9 @@ class Message:
         if self._send_buffer:
             print(f'Sending {self._send_buffer!r} to {self._ipaddr}')
             try:
-                # Should be ready to write
                 sent = self._socket.send(self._send_buffer)
-            except BlockingIOError:
-                # Resource temporarily unavailable (errno EWOULDBLOCK)
-                pass
+            except BrokenPipeError:
+                print('Failed to send data: broken pipe')
             else:
                 self._send_buffer = self._send_buffer[sent:]
                 # Close when the buffer is drained. The response has been sent.

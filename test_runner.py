@@ -2,6 +2,11 @@ import threading
 import subprocess
 from time import sleep
 
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
 
 def main():
     discovery_thread = threading.Thread(
@@ -29,7 +34,7 @@ def main():
     print("All scripts have finished executing.")
 
 def run_script(script_path, script_name):
-    interpreter = './venv/Scripts/python.exe'
+    interpreter = './.venv/bin/python3.12'
     script = script_path + '/' + script_name
     subprocess.run([interpreter, script_name])
 

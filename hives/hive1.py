@@ -1,6 +1,8 @@
 import selectors
 import socket
+import traceback
 
+from discovery.services import Services
 from message.client_message import ClientMessage
 from message.server_message import ServerMessage
 
@@ -22,7 +24,50 @@ def register():
     :return: None
     """
     # TODO
-    pass
+    action = {
+        'action': 'register',
+        'ip': ANTHILL_HOST,
+        'port': ANTHILL_PORT,
+        'type': 'hive'
+    }
+    send_request(action)
+
+def send_request(action):
+    """
+    sends a request to the server
+    :param action:
+    :return:
+    """
+    sel = selectors.DefaultSelector()
+    hive_request = create_request(action)
+    start_connection(sel, DISCOVERY_HOST, DISCOVERY_PORT, hive_request)
+
+    try:
+        while True:
+            events = sel.select(timeout=1)
+            for key, mask in events:
+                message = key.data
+                try:
+                    message.process_events(mask)
+                except Exception:
+                    print(
+                        f'Main: Error: Exception for {message.ipaddr}:\n'
+                        f'{traceback.format_exc()}'
+                    )
+                    message._close()
+            # Check for a socket being monitored to continue.
+            if not sel.get_map():
+                break
+    except KeyboardInterrupt:
+        print('Caught keyboard interrupt, exiting')
+    finally:
+        sel.close()
+    process_response(action, message)
+
+
+def process_response(action, message):
+    print(f"MESSAGE FROM DISCOVERY SERVER GOT: {message.response}, {action}")
+
 
 
 def game():
@@ -30,16 +75,58 @@ def game():
     process the rounds of the game
     :return:
     """
-    # TODO
+    sel = selectors.DefaultSelector()
+    services = Services()
 
-def process_action(message):
+    lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # Avoid bind() exception: OSError: [Errno 48] Address already in use
+    lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    lsock.bind((ANTHILL_HOST, ANTHILL_PORT))
+    lsock.listen()
+    print(f'Discovery: listening on {(ANTHILL_HOST, ANTHILL_PORT)}')
+    lsock.setblocking(False)
+    sel.register(lsock, selectors.EVENT_READ, data=None)
+
+    try:
+        while True:
+            events = sel.select(timeout=None)
+            for key, mask in events:
+                if key.data is None:
+                    accept_wrapper(sel, key.fileobj)
+                else:
+                    message = key.data
+                    try:
+                        message.process_events(mask)
+                        process_action(message, services)
+                    except Exception:
+                        print(
+                            f'Discovery: Error: Exception for {message.ipaddr}:\n'
+                            f'{traceback.format_exc()}'
+                        )
+                        message.close()
+    except KeyboardInterrupt:
+        print('Discovery: Caught keyboard interrupt, exiting')
+    finally:
+        sel.close()
+
+def process_action(message, services):
     """
     process the action from the game service
     :param message:
     :return:
     """
     # TODO
-    pass
+    if DEBUG: print(f'Discovery/process_action: event={message.event}')
+    if message.event == 'READ':
+        action = message.request['action']
+        if action == 'round':
+            service_uuid = '["N", "S"]'
+            print(service_uuid)
+            message.response = service_uuid
+        if action == 'quit':
+            return True
+
+        message.set_selector_events_mask('w')
 
 
 
